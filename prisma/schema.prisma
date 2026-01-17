@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql",
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum QuizVisibility {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  TEXT_INPUT
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum GameStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+  CANCELLED
+}
+
+enum GameMode {
+  SOLO
+  MULTIPLAYER
+  TIMED
+  SURVIVAL
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         UserRole @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  quizzes       Quiz[]
+  gameSessions  GamePlayer[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+
+  quizzes Quiz[]
+}
+
+model Quiz {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  visibility  QuizVisibility @default(PRIVATE)
+  difficulty  Difficulty     @default(MEDIUM)
+  timeLimit   Int?
+  categoryId  String?
+  authorId    String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  author       User          @relation(fields: [authorId], references: [id])
+  questions    Question[]
+  gameSessions GameSession[]
+
+  @@index([authorId])
+  @@index([categoryId])
+  @@index([visibility])
+}
+
+model Question {
+  id            String       @id @default(uuid())
+  quizId        String
+  type          QuestionType @default(SINGLE_CHOICE)
+  text          String
+  options       Json?
+  correctAnswer String?
+  points        Int          @default(10)
+  timeLimit     Int?
+  order         Int
+  explanation   String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  quiz    Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers Answer[]
+
+  @@index([quizId])
+}
+
+model GameSession {
+  id           String     @id @default(uuid())
+  quizId       String
+  inviteCode   String     @unique
+  mode         GameMode   @default(SOLO)
+  status       GameStatus @default(WAITING)
+  hostId       String
+  currentIndex Int        @default(0)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime   @default(now())
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id])
+  players GamePlayer[]
+  answers Answer[]
+
+  @@index([inviteCode])
+  @@index([status])
+}
+
+model GamePlayer {
+  id        String   @id @default(uuid())
+  sessionId String
+  userId    String
+  score     Int      @default(0)
+  rank      Int?
+  joinedAt  DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id])
+  answers Answer[]
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  sessionId  String
+  playerId   String
+  questionId String
+  answer     Json
+  isCorrect  Boolean
+  points     Int      @default(0)
+  timeTaken  Int?
+  answeredAt DateTime @default(now())
+
+  session  GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  player   GamePlayer  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id])
+
+  @@unique([sessionId, playerId, questionId])
+  @@index([sessionId])
+  @@index([playerId])
+}

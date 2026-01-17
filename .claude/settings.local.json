@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn add:*)",
+      "Bash(npx prisma init)",
+      "Bash(npx prisma generate:*)",
+      "Bash(yarn build:*)",
+      "Bash(yarn start:dev)",
+      "Bash(timeout 10 yarn start:dev:*)",
+      "Bash(yarn db:seed:*)"
+    ]
+  }
+}
