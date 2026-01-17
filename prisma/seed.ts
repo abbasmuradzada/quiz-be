@@ -11,65 +11,36 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  console.log('Clearing database...');
+
+  // Delete all data in correct order (respecting foreign keys)
+  await prisma.answer.deleteMany();
+  await prisma.gamePlayer.deleteMany();
+  await prisma.gameSession.deleteMany();
+  await prisma.question.deleteMany();
+  await prisma.quiz.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.user.deleteMany();
+
+  console.log('Database cleared!');
   console.log('Seeding database...');
 
-  // Create categories
-  const categories = await Promise.all([
-    prisma.category.upsert({
-      where: { slug: 'science' },
-      update: {},
-      create: {
-        name: 'Science',
-        slug: 'science',
-        description: 'Questions about physics, chemistry, biology, and more',
-      },
-    }),
-    prisma.category.upsert({
-      where: { slug: 'history' },
-      update: {},
-      create: {
-        name: 'History',
-        slug: 'history',
-        description: 'Questions about world history and historical events',
-      },
-    }),
-    prisma.category.upsert({
-      where: { slug: 'geography' },
-      update: {},
-      create: {
-        name: 'Geography',
-        slug: 'geography',
-        description: 'Questions about countries, capitals, and landmarks',
-      },
-    }),
-    prisma.category.upsert({
-      where: { slug: 'technology' },
-      update: {},
-      create: {
-        name: 'Technology',
-        slug: 'technology',
-        description: 'Questions about computers, programming, and tech',
-      },
-    }),
-    prisma.category.upsert({
-      where: { slug: 'sports' },
-      update: {},
-      create: {
-        name: 'Sports',
-        slug: 'sports',
-        description: 'Questions about various sports and athletes',
-      },
-    }),
-  ]);
+  // Create football category
+  const footballCategory = await prisma.category.create({
+    data: {
+      name: 'Futbol',
+      slug: 'futbol',
+      description: 'Futbol haqqında suallar',
+    },
+  });
 
-  console.log(`Created ${categories.length} categories`);
+  console.log('Created category: Futbol');
 
-  // Create a seed user
+  // Create admin user
   const passwordHash = await bcrypt.hash('password123', 10);
-  const seedUser = await prisma.user.upsert({
-    where: { email: 'admin@quiz.com' },
-    update: {},
-    create: {
+  const adminUser = await prisma.user.create({
+    data: {
       email: 'admin@quiz.com',
       username: 'admin',
       passwordHash,
@@ -77,297 +48,192 @@ async function main() {
     },
   });
 
-  console.log(`Created seed user: ${seedUser.username}`);
+  console.log('Created admin user');
 
-  // Create quizzes with questions
-  const scienceQuiz = await prisma.quiz.create({
+  // Easy questions (30)
+  const easyQuestions = [
+    { text: 'Futbol komandasında neçə oyunçu olur?', options: ['9', '10', '11', '12'], correct: '11' },
+    { text: 'Futbol matçı neçə hissədən ibarətdir?', options: ['1', '2', '3', '4'], correct: '2' },
+    { text: 'Futbolda qapıçı hansı rəngli formada oynayır?', options: ['Komanda ilə eyni', 'Fərqli rəngdə', 'Həmişə qara', 'Həmişə ağ'], correct: 'Fərqli rəngdə' },
+    { text: 'FIFA dünya çempionatı neçə ildən bir keçirilir?', options: ['2 il', '3 il', '4 il', '5 il'], correct: '4 il' },
+    { text: 'Futbol topunun forması necədir?', options: ['Oval', 'Kürə', 'Kvadrat', 'Üçbucaq'], correct: 'Kürə' },
+    { text: 'Penalti nöqtəsi qapıdan neçə metr məsafədədir?', options: ['9 metr', '10 metr', '11 metr', '12 metr'], correct: '11 metr' },
+    { text: 'Futbolda sarı vərəqə nə deməkdir?', options: ['Qol', 'Xəbərdarlıq', 'Meydandan kənarlaşdırma', 'Oyunun sonu'], correct: 'Xəbərdarlıq' },
+    { text: 'Futbolda qırmızı vərəqə nə deməkdir?', options: ['Qol', 'Xəbərdarlıq', 'Meydandan kənarlaşdırma', 'Faul'], correct: 'Meydandan kənarlaşdırma' },
+    { text: 'Ofsayd qaydası hansı idman növünə aiddir?', options: ['Basketbol', 'Voleybol', 'Futbol', 'Tennis'], correct: 'Futbol' },
+    { text: 'Futbol matçının normal vaxtı neçə dəqiqədir?', options: ['60 dəqiqə', '70 dəqiqə', '80 dəqiqə', '90 dəqiqə'], correct: '90 dəqiqə' },
+    { text: 'Hansı ölkə futbolun vətəni sayılır?', options: ['Braziliya', 'İngiltərə', 'İspaniya', 'İtaliya'], correct: 'İngiltərə' },
+    { text: 'Futbolda korner nədir?', options: ['Künc zərbəsi', 'Penalti', 'Sərbəst zərbə', 'Aut'], correct: 'Künc zərbəsi' },
+    { text: 'Qapıçı əlləri ilə topu tuta bilərmi?', options: ['Bəli, öz cərimə meydançasında', 'Xeyr', 'Bəli, hər yerdə', 'Yalnız kornerdə'], correct: 'Bəli, öz cərimə meydançasında' },
+    { text: 'Futbol meydançasının ortasındakı dairənin adı nədir?', options: ['Penalti nöqtəsi', 'Mərkəz dairəsi', 'Korner', 'Aut xətti'], correct: 'Mərkəz dairəsi' },
+    { text: 'Het-trik nə deməkdir?', options: ['1 qol vurmaq', '2 qol vurmaq', '3 qol vurmaq', '4 qol vurmaq'], correct: '3 qol vurmaq' },
+    { text: 'Avropa çempionatı neçə ildən bir keçirilir?', options: ['2 il', '3 il', '4 il', '5 il'], correct: '4 il' },
+    { text: 'Futbolda aut nə zaman verilir?', options: ['Top yan xətti keçəndə', 'Top qapı xəttini keçəndə', 'Faul olanda', 'Ofsayd olanda'], correct: 'Top yan xətti keçəndə' },
+    { text: 'Hansı oyunçu meydanda əlindən istifadə edə bilər?', options: ['Hücumçu', 'Müdafiəçi', 'Yarımmüdafiəçi', 'Qapıçı'], correct: 'Qapıçı' },
+    { text: 'Dünya Kuboku hansı təşkilat tərəfindən keçirilir?', options: ['UEFA', 'FIFA', 'AFFA', 'IOC'], correct: 'FIFA' },
+    { text: 'Futbol meydançası hansı formadadır?', options: ['Dairəvi', 'Kvadrat', 'Düzbucaqlı', 'Üçbucaq'], correct: 'Düzbucaqlı' },
+    { text: 'Çempionlar Liqası hansı təşkilat tərəfindən keçirilir?', options: ['FIFA', 'UEFA', 'AFFA', 'CONMEBOL'], correct: 'UEFA' },
+    { text: 'Futbolda neçə hakim olur?', options: ['1', '2', '3', '4'], correct: '4' },
+    { text: 'Matçda əlavə vaxt neçə dəqiqə ola bilər?', options: ['15+15', '20+20', '30+30', '10+10'], correct: '15+15' },
+    { text: 'Futbol topunun içində nə var?', options: ['Su', 'Qum', 'Hava', 'Plastik'], correct: 'Hava' },
+    { text: 'Qol vurulanda top harada olmalıdır?', options: ['Qapı xəttini tam keçməlidir', 'Xəttə toxunmalıdır', 'Yarıdan çox keçməlidir', 'Qapının içində'], correct: 'Qapı xəttini tam keçməlidir' },
+    { text: 'Futbolda "dərbi" nə deməkdir?', options: ['Final matçı', 'Şəhər rəqibləri arasında oyun', 'Yoldaşlıq oyunu', 'Kubok oyunu'], correct: 'Şəhər rəqibləri arasında oyun' },
+    { text: 'VAR nədir?', options: ['Video Hakim Sistemi', 'Oyunçu adı', 'Turnir adı', 'Stadion adı'], correct: 'Video Hakim Sistemi' },
+    { text: 'Futbolda hansı bədən hissəsi ilə oynamaq olmaz?', options: ['Baş', 'Sinə', 'Əl', 'Ayaq'], correct: 'Əl' },
+    { text: 'Azərbaycan millisinin forma rəngi nədir?', options: ['Qırmızı-ağ', 'Mavi-ağ', 'Yaşıl-ağ', 'Qara-ağ'], correct: 'Mavi-ağ' },
+    { text: 'Futbolda "kapitan" kimin adıdır?', options: ['Baş məşqçi', 'Komanda lideri', 'Hakim', 'Heyət üzvü'], correct: 'Komanda lideri' },
+  ];
+
+  // Medium questions (30)
+  const mediumQuestions = [
+    { text: '2022 Dünya Kubokunu hansı ölkə qazandı?', options: ['Braziliya', 'Fransa', 'Argentina', 'Xorvatiya'], correct: 'Argentina' },
+    { text: 'Lionel Messi hansı ölkənin vətəndaşıdır?', options: ['Braziliya', 'Portuqaliya', 'Argentina', 'İspaniya'], correct: 'Argentina' },
+    { text: 'Cristiano Ronaldo hansı ölkədəndir?', options: ['Braziliya', 'Portuqaliya', 'İspaniya', 'İtaliya'], correct: 'Portuqaliya' },
+    { text: 'Barcelona klubu hansı şəhərdədir?', options: ['Madrid', 'Barselona', 'Lissabon', 'Roma'], correct: 'Barselona' },
+    { text: 'Real Madrid neçənci ildə yaradılıb?', options: ['1900', '1902', '1905', '1910'], correct: '1902' },
+    { text: 'Premier Liqa hansı ölkənin liqasıdır?', options: ['İspaniya', 'İtaliya', 'İngiltərə', 'Almaniya'], correct: 'İngiltərə' },
+    { text: 'La Liqa hansı ölkənin liqasıdır?', options: ['İspaniya', 'İtaliya', 'Fransa', 'Portuqaliya'], correct: 'İspaniya' },
+    { text: 'Serie A hansı ölkənin liqasıdır?', options: ['İspaniya', 'İtaliya', 'Fransa', 'Almaniya'], correct: 'İtaliya' },
+    { text: 'Bundesliga hansı ölkənin liqasıdır?', options: ['Avstriya', 'İsveçrə', 'Almaniya', 'Hollandiya'], correct: 'Almaniya' },
+    { text: 'Neymar hansı ölkədəndir?', options: ['Argentina', 'Braziliya', 'Kolumbiya', 'Uruqvay'], correct: 'Braziliya' },
+    { text: 'Dünya Kuboklarında ən çox qol vuran oyunçu kimdir?', options: ['Pele', 'Ronaldo', 'Miroslav Klose', 'Messi'], correct: 'Miroslav Klose' },
+    { text: 'Hansı klub ən çox Çempionlar Liqası qazanıb?', options: ['Barcelona', 'Milan', 'Real Madrid', 'Liverpool'], correct: 'Real Madrid' },
+    { text: 'Manchester United hansı şəhərdədir?', options: ['London', 'Mançester', 'Liverpool', 'Birmingham'], correct: 'Mançester' },
+    { text: '2018 Dünya Kuboku harada keçirilib?', options: ['Braziliya', 'Rusiya', 'Qətər', 'Almaniya'], correct: 'Rusiya' },
+    { text: 'Maradona hansı ölkədən idi?', options: ['Braziliya', 'Argentina', 'Uruqvay', 'Çili'], correct: 'Argentina' },
+    { text: 'Camp Nou hansı klubun stadionudur?', options: ['Real Madrid', 'Barcelona', 'Atletico Madrid', 'Sevilla'], correct: 'Barcelona' },
+    { text: 'Old Trafford hansı klubun stadionudur?', options: ['Liverpool', 'Arsenal', 'Manchester United', 'Chelsea'], correct: 'Manchester United' },
+    { text: 'Pele neçə Dünya Kuboku qazanıb?', options: ['1', '2', '3', '4'], correct: '3' },
+    { text: 'Hansı ölkə ən çox Dünya Kuboku qazanıb?', options: ['Almaniya', 'İtaliya', 'Braziliya', 'Argentina'], correct: 'Braziliya' },
+    { text: 'Qızıl top mükafatı nəyə görə verilir?', options: ['Ən yaxşı qapıçıya', 'Ən yaxşı oyunçuya', 'Ən yaxşı məşqçiyə', 'Ən yaxşı kluba'], correct: 'Ən yaxşı oyunçuya' },
+    { text: 'Zinedine Zidane hansı ölkədəndir?', options: ['İtaliya', 'İspaniya', 'Fransa', 'Portuqaliya'], correct: 'Fransa' },
+    { text: 'Liverpool hansı şəhərdədir?', options: ['London', 'Mançester', 'Liverpool', 'Birmingham'], correct: 'Liverpool' },
+    { text: 'Bayern Münhen hansı ölkədəndir?', options: ['Avstriya', 'Almaniya', 'İsveçrə', 'Hollandiya'], correct: 'Almaniya' },
+    { text: 'PSG hansı şəhərdədir?', options: ['London', 'Madrid', 'Paris', 'Roma'], correct: 'Paris' },
+    { text: 'Juventus hansı şəhərdədir?', options: ['Milan', 'Roma', 'Turin', 'Neapol'], correct: 'Turin' },
+    { text: 'Luka Modric hansı ölkədəndir?', options: ['Serbiya', 'Xorvatiya', 'Sloveniya', 'Bosniya'], correct: 'Xorvatiya' },
+    { text: 'Kylian Mbappe hansı ölkədəndir?', options: ['Belçika', 'Fransa', 'Senegal', 'Kamerun'], correct: 'Fransa' },
+    { text: 'Santiago Bernabeu hansı klubun stadionudur?', options: ['Barcelona', 'Real Madrid', 'Atletico Madrid', 'Valencia'], correct: 'Real Madrid' },
+    { text: 'Erling Haaland hansı ölkədəndir?', options: ['İsveç', 'Danimarka', 'Norveç', 'Finlandiya'], correct: 'Norveç' },
+    { text: 'Chelsea hansı şəhərdədir?', options: ['Mançester', 'London', 'Liverpool', 'Leeds'], correct: 'London' },
+  ];
+
+  // Hard questions (30)
+  const hardQuestions = [
+    { text: '1930-cu ildə ilk Dünya Kubokunu hansı ölkə qazandı?', options: ['Braziliya', 'Argentina', 'Uruqvay', 'İtaliya'], correct: 'Uruqvay' },
+    { text: 'Hansı oyunçu 5 dəfə Qızıl top qazanıb (Messi və Ronaldodan başqa)?', options: ['Cruyff', 'Platini', 'Beckenbauer', 'Heç kim'], correct: 'Heç kim' },
+    { text: 'Ajax hansı şəhərdədir?', options: ['Rotterdam', 'Amsterdam', 'Haaqa', 'Eyndxoven'], correct: 'Amsterdam' },
+    { text: '2006 Dünya Kuboku finalında Zidane kimə kafa vurdu?', options: ['Buffon', 'Cannavaro', 'Materazzi', 'Pirlo'], correct: 'Materazzi' },
+    { text: 'Hansı klub "Treble" (üçlük) qazanan ilk İngilis klubudur?', options: ['Liverpool', 'Chelsea', 'Manchester United', 'Arsenal'], correct: 'Manchester United' },
+    { text: 'Sir Alex Ferguson Manchester Unitedda neçə il çalışıb?', options: ['20 il', '23 il', '26 il', '30 il'], correct: '26 il' },
+    { text: 'Marakanə stadionu hansı şəhərdədir?', options: ['San Paulo', 'Rio de Janeyro', 'Buenos Ayres', 'Lima'], correct: 'Rio de Janeyro' },
+    { text: 'Hansı oyunçu bir Dünya Kubokunda ən çox qol vurub?', options: ['Pele', 'Just Fontaine', 'Gerd Müller', 'Ronaldo'], correct: 'Just Fontaine' },
+    { text: 'Johan Cruyff hansı ölkədən idi?', options: ['Belçika', 'Almaniya', 'Hollandiya', 'Danimarka'], correct: 'Hollandiya' },
+    { text: 'Hansı klub "Galacticos" adı ilə tanınır?', options: ['Barcelona', 'Real Madrid', 'Manchester United', 'Bayern'], correct: 'Real Madrid' },
+    { text: '1994 Dünya Kuboku finalında penalti buraxan Braziliyalı kimdir?', options: ['Romario', 'Bebeto', 'Roberto Baggio', 'Dunga'], correct: 'Roberto Baggio' },
+    { text: 'Wembley stadionu hansı şəhərdədir?', options: ['Mançester', 'Liverpool', 'London', 'Birmingham'], correct: 'London' },
+    { text: 'Hansı ölkə 2002 Dünya Kubokuna ev sahibliyi etdi?', options: ['Yaponiya', 'Cənubi Koreya', 'Yaponiya və C.Koreya', 'Çin'], correct: 'Yaponiya və C.Koreya' },
+    { text: 'Ferenc Puskas hansı ölkədən idi?', options: ['Polşa', 'Çexiya', 'Macarıstan', 'Rumıniya'], correct: 'Macarıstan' },
+    { text: 'Hansı klub ən çox La Liqa çempionluğu qazanıb?', options: ['Barcelona', 'Real Madrid', 'Atletico Madrid', 'Valencia'], correct: 'Real Madrid' },
+    { text: 'İlk Qızıl top qazanan oyunçu kimdir?', options: ['Pele', 'Di Stefano', 'Stanley Matthews', 'Puskas'], correct: 'Stanley Matthews' },
+    { text: 'Hansı oyunçu "O Fenomeno" ləqəbi ilə tanınır?', options: ['Ronaldinho', 'Ronaldo Nazario', 'Rivaldo', 'Romario'], correct: 'Ronaldo Nazario' },
+    { text: 'AC Milan neçənci ildə yaradılıb?', options: ['1899', '1902', '1905', '1910'], correct: '1899' },
+    { text: '2010 Dünya Kuboku hansı ölkədə keçirilib?', options: ['Braziliya', 'Almaniya', 'Cənubi Afrika', 'Rusiya'], correct: 'Cənubi Afrika' },
+    { text: 'Hansı oyunçu ən çox Çempionlar Liqası qazanıb?', options: ['Messi', 'Ronaldo', 'Paco Gento', 'Maldini'], correct: 'Paco Gento' },
+    { text: 'Borussia Dortmundun stadionu necə adlanır?', options: ['Allianz Arena', 'Signal Iduna Park', 'Olympiastadion', 'Veltins Arena'], correct: 'Signal Iduna Park' },
+    { text: 'Hansı ölkə 3 dəfə ardıcıl Avropa çempionu olub?', options: ['Almaniya', 'Fransa', 'İspaniya', 'Heç biri'], correct: 'İspaniya' },
+    { text: 'Alfredo Di Stefano hansı ölkələrin millisində oynayıb?', options: ['Argentina', 'İspaniya', 'Kolumbiya', 'Hamısı'], correct: 'Hamısı' },
+    { text: 'Hansı məşqçi ən çox Çempionlar Liqası qazanıb?', options: ['Guardiola', 'Ancelotti', 'Ferguson', 'Mourinho'], correct: 'Ancelotti' },
+    { text: '1950 Dünya Kuboku finalında Braziliyanı hansı ölkə məğlub etdi?', options: ['Argentina', 'Uruqvay', 'İsveç', 'Almaniya'], correct: 'Uruqvay' },
+    { text: 'San Siro stadionu hansı klubların evidir?', options: ['Juventus və Torino', 'Roma və Lazio', 'Milan və Inter', 'Napoli və Salernitana'], correct: 'Milan və Inter' },
+    { text: 'Hansı oyunçu "Qara İnci" ləqəbi ilə tanınırdı?', options: ['Pele', 'Eusebio', 'Maradona', 'Garrincha'], correct: 'Eusebio' },
+    { text: 'Tottenham Hotspur hansı ildə Çempionlar Liqası finalına çıxdı?', options: ['2017', '2018', '2019', '2020'], correct: '2019' },
+    { text: 'Bobby Charlton hansı klubda oynayırdı?', options: ['Liverpool', 'Manchester United', 'Chelsea', 'Arsenal'], correct: 'Manchester United' },
+    { text: 'Hansı ölkə 1954 Dünya Kubokunu qazandı?', options: ['Macarıstan', 'Braziliya', 'Almaniya', 'Uruqvay'], correct: 'Almaniya' },
+  ];
+
+  // Create Easy Quiz
+  const easyQuiz = await prisma.quiz.create({
     data: {
-      title: 'General Science Quiz',
-      description: 'Test your knowledge of basic science concepts',
+      title: 'Futbol - Asan Səviyyə',
+      description: 'Futbol haqqında asan suallar',
       visibility: QuizVisibility.PUBLIC,
-      difficulty: Difficulty.MEDIUM,
-      timeLimit: 300,
-      categoryId: categories[0].id,
-      authorId: seedUser.id,
+      difficulty: Difficulty.EASY,
+      timeLimit: 600,
+      categoryId: footballCategory.id,
+      authorId: adminUser.id,
       questions: {
-        create: [
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'What is the chemical symbol for water?',
-            options: JSON.stringify(['H2O', 'CO2', 'NaCl', 'O2']),
-            correctAnswer: 'H2O',
-            points: 10,
-            timeLimit: 30,
-            order: 1,
-            explanation: 'Water is composed of two hydrogen atoms and one oxygen atom.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'What planet is known as the Red Planet?',
-            options: JSON.stringify(['Venus', 'Mars', 'Jupiter', 'Saturn']),
-            correctAnswer: 'Mars',
-            points: 10,
-            timeLimit: 30,
-            order: 2,
-            explanation: 'Mars appears red due to iron oxide (rust) on its surface.',
-          },
-          {
-            type: QuestionType.TRUE_FALSE,
-            text: 'The speed of light is approximately 300,000 km/s.',
-            options: JSON.stringify(['True', 'False']),
-            correctAnswer: 'True',
-            points: 10,
-            timeLimit: 20,
-            order: 3,
-            explanation: 'Light travels at approximately 299,792 km/s in a vacuum.',
-          },
-          {
-            type: QuestionType.MULTIPLE_CHOICE,
-            text: 'Which of the following are noble gases?',
-            options: JSON.stringify(['Helium', 'Nitrogen', 'Neon', 'Argon']),
-            correctAnswer: JSON.stringify(['Helium', 'Neon', 'Argon']),
-            points: 15,
-            timeLimit: 45,
-            order: 4,
-            explanation: 'Noble gases are in Group 18 of the periodic table.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'What is the powerhouse of the cell?',
-            options: JSON.stringify(['Nucleus', 'Mitochondria', 'Ribosome', 'Golgi apparatus']),
-            correctAnswer: 'Mitochondria',
-            points: 10,
-            timeLimit: 30,
-            order: 5,
-            explanation: 'Mitochondria produce ATP, the energy currency of cells.',
-          },
-        ],
+        create: easyQuestions.map((q, index) => ({
+          type: QuestionType.SINGLE_CHOICE,
+          text: q.text,
+          options: JSON.stringify(q.options),
+          correctAnswer: q.correct,
+          points: 10,
+          timeLimit: 30,
+          order: index + 1,
+        })),
       },
     },
   });
 
-  console.log(`Created quiz: ${scienceQuiz.title}`);
+  console.log(`Created quiz: ${easyQuiz.title} (30 questions)`);
 
-  const historyQuiz = await prisma.quiz.create({
+  // Create Medium Quiz
+  const mediumQuiz = await prisma.quiz.create({
     data: {
-      title: 'World History Challenge',
-      description: 'How well do you know world history?',
+      title: 'Futbol - Orta Səviyyə',
+      description: 'Futbol haqqında orta çətinlikdə suallar',
+      visibility: QuizVisibility.PUBLIC,
+      difficulty: Difficulty.MEDIUM,
+      timeLimit: 600,
+      categoryId: footballCategory.id,
+      authorId: adminUser.id,
+      questions: {
+        create: mediumQuestions.map((q, index) => ({
+          type: QuestionType.SINGLE_CHOICE,
+          text: q.text,
+          options: JSON.stringify(q.options),
+          correctAnswer: q.correct,
+          points: 15,
+          timeLimit: 30,
+          order: index + 1,
+        })),
+      },
+    },
+  });
+
+  console.log(`Created quiz: ${mediumQuiz.title} (30 questions)`);
+
+  // Create Hard Quiz
+  const hardQuiz = await prisma.quiz.create({
+    data: {
+      title: 'Futbol - Çətin Səviyyə',
+      description: 'Futbol haqqında çətin suallar',
       visibility: QuizVisibility.PUBLIC,
       difficulty: Difficulty.HARD,
       timeLimit: 600,
-      categoryId: categories[1].id,
-      authorId: seedUser.id,
+      categoryId: footballCategory.id,
+      authorId: adminUser.id,
       questions: {
-        create: [
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'In what year did World War II end?',
-            options: JSON.stringify(['1943', '1944', '1945', '1946']),
-            correctAnswer: '1945',
-            points: 10,
-            timeLimit: 30,
-            order: 1,
-            explanation: 'WWII ended in 1945 with the surrender of Japan.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'Who was the first President of the United States?',
-            options: JSON.stringify(['Thomas Jefferson', 'John Adams', 'George Washington', 'Benjamin Franklin']),
-            correctAnswer: 'George Washington',
-            points: 10,
-            timeLimit: 30,
-            order: 2,
-            explanation: 'George Washington served as president from 1789 to 1797.',
-          },
-          {
-            type: QuestionType.TRUE_FALSE,
-            text: 'The Great Wall of China is visible from space with the naked eye.',
-            options: JSON.stringify(['True', 'False']),
-            correctAnswer: 'False',
-            points: 10,
-            timeLimit: 20,
-            order: 3,
-            explanation: 'This is a common myth. The wall is not visible from space without aid.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'Which ancient civilization built the pyramids of Giza?',
-            options: JSON.stringify(['Romans', 'Greeks', 'Egyptians', 'Mesopotamians']),
-            correctAnswer: 'Egyptians',
-            points: 10,
-            timeLimit: 30,
-            order: 4,
-            explanation: 'The pyramids were built as tombs for Egyptian pharaohs.',
-          },
-          {
-            type: QuestionType.TEXT_INPUT,
-            text: 'What year did the Titanic sink?',
-            options: Prisma.JsonNull,
-            correctAnswer: '1912',
-            points: 15,
-            timeLimit: 45,
-            order: 5,
-            explanation: 'The Titanic sank on April 15, 1912.',
-          },
-        ],
+        create: hardQuestions.map((q, index) => ({
+          type: QuestionType.SINGLE_CHOICE,
+          text: q.text,
+          options: JSON.stringify(q.options),
+          correctAnswer: q.correct,
+          points: 20,
+          timeLimit: 30,
+          order: index + 1,
+        })),
       },
     },
   });
 
-  console.log(`Created quiz: ${historyQuiz.title}`);
-
-  const techQuiz = await prisma.quiz.create({
-    data: {
-      title: 'Programming Fundamentals',
-      description: 'Test your programming knowledge',
-      visibility: QuizVisibility.PUBLIC,
-      difficulty: Difficulty.EASY,
-      timeLimit: 300,
-      categoryId: categories[3].id,
-      authorId: seedUser.id,
-      questions: {
-        create: [
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'What does HTML stand for?',
-            options: JSON.stringify([
-              'Hyper Text Markup Language',
-              'High Tech Modern Language',
-              'Hyper Transfer Markup Language',
-              'Home Tool Markup Language',
-            ]),
-            correctAnswer: 'Hyper Text Markup Language',
-            points: 10,
-            timeLimit: 30,
-            order: 1,
-            explanation: 'HTML is the standard markup language for creating web pages.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'Which programming language is known for its use in data science?',
-            options: JSON.stringify(['Java', 'Python', 'C++', 'Ruby']),
-            correctAnswer: 'Python',
-            points: 10,
-            timeLimit: 30,
-            order: 2,
-            explanation: 'Python is widely used in data science due to libraries like pandas and numpy.',
-          },
-          {
-            type: QuestionType.TRUE_FALSE,
-            text: 'JavaScript and Java are the same programming language.',
-            options: JSON.stringify(['True', 'False']),
-            correctAnswer: 'False',
-            points: 10,
-            timeLimit: 20,
-            order: 3,
-            explanation: 'Despite similar names, they are completely different languages.',
-          },
-          {
-            type: QuestionType.MULTIPLE_CHOICE,
-            text: 'Which of the following are JavaScript frameworks/libraries?',
-            options: JSON.stringify(['React', 'Django', 'Vue', 'Angular']),
-            correctAnswer: JSON.stringify(['React', 'Vue', 'Angular']),
-            points: 15,
-            timeLimit: 45,
-            order: 4,
-            explanation: 'Django is a Python framework, while the others are JavaScript.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'What does CSS stand for?',
-            options: JSON.stringify([
-              'Computer Style Sheets',
-              'Cascading Style Sheets',
-              'Creative Style System',
-              'Colorful Style Sheets',
-            ]),
-            correctAnswer: 'Cascading Style Sheets',
-            points: 10,
-            timeLimit: 30,
-            order: 5,
-            explanation: 'CSS is used for styling and layout of web pages.',
-          },
-        ],
-      },
-    },
-  });
-
-  console.log(`Created quiz: ${techQuiz.title}`);
-
-  const geographyQuiz = await prisma.quiz.create({
-    data: {
-      title: 'World Geography',
-      description: 'Explore the world through this geography quiz',
-      visibility: QuizVisibility.PUBLIC,
-      difficulty: Difficulty.MEDIUM,
-      timeLimit: 400,
-      categoryId: categories[2].id,
-      authorId: seedUser.id,
-      questions: {
-        create: [
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'What is the capital of Australia?',
-            options: JSON.stringify(['Sydney', 'Melbourne', 'Canberra', 'Perth']),
-            correctAnswer: 'Canberra',
-            points: 10,
-            timeLimit: 30,
-            order: 1,
-            explanation: 'Canberra is the capital, though Sydney is the largest city.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'Which is the longest river in the world?',
-            options: JSON.stringify(['Amazon', 'Nile', 'Yangtze', 'Mississippi']),
-            correctAnswer: 'Nile',
-            points: 10,
-            timeLimit: 30,
-            order: 2,
-            explanation: 'The Nile River is approximately 6,650 km long.',
-          },
-          {
-            type: QuestionType.TRUE_FALSE,
-            text: 'Mount Everest is located in the Himalayas.',
-            options: JSON.stringify(['True', 'False']),
-            correctAnswer: 'True',
-            points: 10,
-            timeLimit: 20,
-            order: 3,
-            explanation: 'Mount Everest sits on the border of Nepal and Tibet in the Himalayas.',
-          },
-          {
-            type: QuestionType.SINGLE_CHOICE,
-            text: 'Which country has the largest population?',
-            options: JSON.stringify(['India', 'United States', 'China', 'Indonesia']),
-            correctAnswer: 'India',
-            points: 10,
-            timeLimit: 30,
-            order: 4,
-            explanation: 'India surpassed China as the most populous country in 2023.',
-          },
-          {
-            type: QuestionType.TEXT_INPUT,
-            text: 'How many continents are there on Earth?',
-            options: Prisma.JsonNull,
-            correctAnswer: '7',
-            points: 10,
-            timeLimit: 30,
-            order: 5,
-            explanation: 'The 7 continents are Africa, Antarctica, Asia, Australia, Europe, North America, and South America.',
-          },
-        ],
-      },
-    },
-  });
-
-  console.log(`Created quiz: ${geographyQuiz.title}`);
+  console.log(`Created quiz: ${hardQuiz.title} (30 questions)`);
 
   // Count totals
-  const quizCount = await prisma.quiz.count();
   const questionCount = await prisma.question.count();
 
   console.log('\nSeeding completed!');
-  console.log(`Total quizzes: ${quizCount}`);
   console.log(`Total questions: ${questionCount}`);
 }
 
@@ -378,4 +244,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

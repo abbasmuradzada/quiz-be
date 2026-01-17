@@ -152,9 +152,8 @@ export class MultiplayerGateway
 
       const existingAnswer = await this.prisma.answer.findUnique({
         where: {
-          sessionId_playerId_questionId: {
+          sessionId_questionId: {
             sessionId: dto.sessionId,
-            playerId: player.id,
             questionId: dto.questionId,
           },
         },

@@ -3,8 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql",
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
 }
 
 enum UserRole {
@@ -163,7 +162,7 @@ model GamePlayer {
 model Answer {
   id         String   @id @default(uuid())
   sessionId  String
-  playerId   String
+  playerId   String?
   questionId String
   answer     Json
   isCorrect  Boolean
@@ -172,10 +171,10 @@ model Answer {
   answeredAt DateTime @default(now())
 
   session  GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  player   GamePlayer  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player   GamePlayer? @relation(fields: [playerId], references: [id], onDelete: Cascade)
   question Question    @relation(fields: [questionId], references: [id])
 
-  @@unique([sessionId, playerId, questionId])
+  @@unique([sessionId, questionId])
   @@index([sessionId])
   @@index([playerId])
 }

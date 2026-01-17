@@ -2,9 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
-import { GameMode, GameStatus, QuizVisibility, UserRole } from '@prisma/client';
+import { GameMode, GameStatus, QuizVisibility } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { PrismaService } from '../core/prisma/prisma.service';
 import { ScoringService } from './scoring.service';
@@ -17,7 +16,7 @@ export class GameplayService {
     private scoringService: ScoringService,
   ) {}
 
-  async startSoloGame(quizId: string, userId: string, userRole: UserRole) {
+  async startSoloGame(quizId: string) {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
       include: {
@@ -40,12 +39,8 @@ export class GameplayService {
       throw new NotFoundException('Quiz not found');
     }
 
-    if (
-      quiz.visibility === QuizVisibility.PRIVATE &&
-      quiz.authorId !== userId &&
-      userRole !== UserRole.ADMIN
-    ) {
-      throw new ForbiddenException('You cannot access this quiz');
+    if (quiz.visibility === QuizVisibility.PRIVATE) {
+      throw new BadRequestException('This quiz is private');
     }
 
     if (quiz.questions.length === 0) {
@@ -58,25 +53,10 @@ export class GameplayService {
         inviteCode: nanoid(8),
         mode: GameMode.SOLO,
         status: GameStatus.IN_PROGRESS,
-        hostId: userId,
+        hostId: 'anonymous',
         startedAt: new Date(),
       },
     });
-
-    await this.prisma.gamePlayer.create({
-      data: {
-        sessionId: session.id,
-        userId,
-      },
-    });
-
-    const questionsWithoutAnswers = quiz.questions.map((q) => ({
-      ...q,
-      options: (q.options as any[])?.map((o: any) => ({
-        id: o.id,
-        text: o.text,
-      })),
-    }));
 
     return {
       sessionId: session.id,
@@ -85,12 +65,15 @@ export class GameplayService {
         title: quiz.title,
         timeLimit: quiz.timeLimit,
       },
-      questions: questionsWithoutAnswers,
+      questions: quiz.questions.map((q) => ({
+        ...q,
+        options: q.options as string[],
+      })),
       totalQuestions: quiz.questions.length,
     };
   }
 
-  async submitAnswer(userId: string, dto: SubmitAnswerDto) {
+  async submitAnswer(dto: SubmitAnswerDto) {
     const session = await this.prisma.gameSession.findUnique({
       where: { id: dto.sessionId },
       include: {
@@ -106,24 +89,18 @@ export class GameplayService {
       throw new BadRequestException('Game is not in progress');
     }
 
-    const player = await this.prisma.gamePlayer.findUnique({
-      where: {
-        sessionId_userId: {
-          sessionId: dto.sessionId,
-          userId,
-        },
-      },
+    const question = await this.prisma.question.findUnique({
+      where: { id: dto.questionId },
     });
 
-    if (!player) {
-      throw new ForbiddenException('You are not part of this game');
+    if (!question || question.quizId !== session.quizId) {
+      throw new NotFoundException('Question not found');
     }
 
     const existingAnswer = await this.prisma.answer.findUnique({
       where: {
-        sessionId_playerId_questionId: {
+        sessionId_questionId: {
           sessionId: dto.sessionId,
-          playerId: player.id,
           questionId: dto.questionId,
         },
       },
@@ -133,20 +110,12 @@ export class GameplayService {
       throw new BadRequestException('You have already answered this question');
     }
 
-    const question = await this.prisma.question.findUnique({
-      where: { id: dto.questionId },
-    });
-
-    if (!question || question.quizId !== session.quizId) {
-      throw new NotFoundException('Question not found');
-    }
-
     const timeLimit = question.timeLimit ?? session.quiz.timeLimit ?? undefined;
 
     const { isCorrect, points } = this.scoringService.validateAndScore(
       question.type,
       dto.answer,
-      question.options as any[],
+      question.options as string[],
       question.correctAnswer,
       question.points,
       dto.timeTaken,
@@ -156,7 +125,6 @@ export class GameplayService {
     await this.prisma.answer.create({
       data: {
         sessionId: dto.sessionId,
-        playerId: player.id,
         questionId: dto.questionId,
         answer: dto.answer as any,
         isCorrect,
@@ -165,32 +133,21 @@ export class GameplayService {
       },
     });
 
-    await this.prisma.gamePlayer.update({
-      where: { id: player.id },
-      data: {
-        score: { increment: points },
-      },
-    });
-
     return {
       isCorrect,
       points,
-      correctAnswer: this.getCorrectAnswer(question),
+      correctAnswer: question.correctAnswer,
       explanation: question.explanation,
     };
   }
 
-  async finishGame(sessionId: string, userId: string) {
+  async finishGame(sessionId: string) {
     const session = await this.prisma.gameSession.findUnique({
       where: { id: sessionId },
     });
 
     if (!session) {
       throw new NotFoundException('Game session not found');
-    }
-
-    if (session.hostId !== userId) {
-      throw new ForbiddenException('Only the host can finish the game');
     }
 
     await this.prisma.gameSession.update({
@@ -201,42 +158,28 @@ export class GameplayService {
       },
     });
 
-    return this.getResults(sessionId, userId);
+    return this.getResults(sessionId);
   }
 
-  async getResults(sessionId: string, userId: string) {
+  async getResults(sessionId: string) {
     const session = await this.prisma.gameSession.findUnique({
       where: { id: sessionId },
       include: {
         quiz: {
           select: { id: true, title: true },
         },
-        players: {
+        answers: {
           include: {
-            user: {
-              select: { id: true, username: true },
-            },
-            answers: {
-              include: {
-                question: {
-                  select: { id: true, text: true, points: true },
-                },
-              },
+            question: {
+              select: { id: true, text: true, points: true },
             },
           },
-          orderBy: { score: 'desc' },
         },
       },
     });
 
     if (!session) {
       throw new NotFoundException('Game session not found');
-    }
-
-    const player = session.players.find((p) => p.userId === userId);
-
-    if (!player) {
-      throw new ForbiddenException('You are not part of this game');
     }
 
     const totalQuestions = await this.prisma.question.count({
@@ -248,20 +191,20 @@ export class GameplayService {
       _sum: { points: true },
     });
 
+    const totalScore = session.answers.reduce((sum, a) => sum + a.points, 0);
+    const correctAnswers = session.answers.filter((a) => a.isCorrect).length;
+
     return {
       sessionId: session.id,
       quiz: session.quiz,
       status: session.status,
-      player: {
-        score: player.score,
-        rank: session.players.findIndex((p) => p.id === player.id) + 1,
-        correctAnswers: player.answers.filter((a) => a.isCorrect).length,
-        totalQuestions,
-      },
+      score: totalScore,
+      correctAnswers,
+      totalQuestions,
       maxPossibleScore: maxPossibleScore._sum.points || 0,
       startedAt: session.startedAt,
       finishedAt: session.finishedAt,
-      answers: player.answers.map((a) => ({
+      answers: session.answers.map((a) => ({
         questionId: a.questionId,
         questionText: a.question.text,
         isCorrect: a.isCorrect,
@@ -269,17 +212,5 @@ export class GameplayService {
         timeTaken: a.timeTaken,
       })),
     };
-  }
-
-  private getCorrectAnswer(question: any): any {
-    if (question.correctAnswer) {
-      return question.correctAnswer;
-    }
-
-    const options = question.options as any[];
-    if (!options) return null;
-
-    const correct = options.filter((o) => o.isCorrect);
-    return correct.length === 1 ? correct[0].id : correct.map((o) => o.id);
   }
 }

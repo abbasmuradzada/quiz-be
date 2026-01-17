@@ -1,49 +1,33 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-} from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Controller, Post, Get, Body, Param } from '@nestjs/common';
 import { GameplayService } from './gameplay.service';
 import { SubmitAnswerDto } from './dto';
-import { CurrentUser } from '../auth/decorators';
+import { Public } from '../auth/decorators';
 
 @Controller('play')
 export class GameplayController {
   constructor(private gameplayService: GameplayService) {}
 
+  @Public()
   @Post('solo/:quizId')
-  startSoloGame(
-    @Param('quizId') quizId: string,
-    @CurrentUser('id') userId: string,
-    @CurrentUser('role') userRole: UserRole,
-  ) {
-    return this.gameplayService.startSoloGame(quizId, userId, userRole);
+  startSoloGame(@Param('quizId') quizId: string) {
+    return this.gameplayService.startSoloGame(quizId);
   }
 
+  @Public()
   @Post('answer')
-  submitAnswer(
-    @CurrentUser('id') userId: string,
-    @Body() dto: SubmitAnswerDto,
-  ) {
-    return this.gameplayService.submitAnswer(userId, dto);
+  submitAnswer(@Body() dto: SubmitAnswerDto) {
+    return this.gameplayService.submitAnswer(dto);
   }
 
+  @Public()
   @Post(':sessionId/finish')
-  finishGame(
-    @Param('sessionId') sessionId: string,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.gameplayService.finishGame(sessionId, userId);
+  finishGame(@Param('sessionId') sessionId: string) {
+    return this.gameplayService.finishGame(sessionId);
   }
 
+  @Public()
   @Get(':sessionId/results')
-  getResults(
-    @Param('sessionId') sessionId: string,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.gameplayService.getResults(sessionId, userId);
+  getResults(@Param('sessionId') sessionId: string) {
+    return this.gameplayService.getResults(sessionId);
   }
 }
